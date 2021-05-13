@@ -20,7 +20,7 @@ keypress.
 ```rust
 fn main() {
     println!("Hello world!");
-    press_btn_continue::wait("Press any key to continue...");
+    press_btn_continue::wait("Press any key to continue...").unwrap();
 }
 ```
 

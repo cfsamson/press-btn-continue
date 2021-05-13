@@ -1,14 +1,14 @@
 use std::{ffi::c_void, io::{self, Write}};
 use std::os::windows::io::AsRawHandle;
 
-pub fn wait(txt: &str) {
+pub fn wait(txt: &str) -> io::Result<()> {
     if !txt.is_empty() {
         println!("{}", txt);
     }
 
     let stdin = io::stdin();
     let handle = stdin.as_raw_handle();
-    get_char(handle).unwrap();
+    get_char(handle)
 }
 
 #[link(name="kernel32")]
