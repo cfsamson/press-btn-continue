@@ -3,7 +3,7 @@
 Small crate that gives an easy access to the classic Windows "Press any key to
 continue" console prompt.
 
-There are currently no way to implement this using Rusts standard library. The
+There is currently no way to implement this using Rust's standard library. The
 closest you can get is to read one character from stdin but the user has to
 press "ENTER" to do that so you essentially get "Press ENTER to continue..."
 doing like this:
@@ -24,7 +24,7 @@ fn main() {
 }
 ```
 
-## Compatability
+## Compatibility
 
 As of now this library only compiles on Windows but I'd be happy to add support
 for other platforms as well later on.
