@@ -34,24 +34,52 @@ fn prompt(msg: &str) -> io::Result<()> {
     handle.flush()
 }
 
-// See: https://docs.microsoft.com/en-us/windows/console/input-record-str
 #[repr(C)]
-union InputRecord {
-    event_type: u16,
-    // `INPUT_RECORD` has a size of 20 and an alignment of 4.
-    uninit: MaybeUninit<[u32; 5]>,
+struct KeyEventRecord {
+    key_down: i32,
+    repeat_count: u16,
+    virtual_key_code: u16,
+    virtual_scan_code: u16,
+    // A union between WCHAR and CHAR. A `u16` is fine here because
+    // we only use the Unicode variant of `ReadConsoleInput`.
+    char: u16,
+    control_key_state: u32,
 }
 
-const FILE_TYPE_CHAR: u16 = 0x0002;
-const INVALID_HANDLE_VALUE: RawHandle = !0 as RawHandle;
-const KEY_EVENT: u16 = 0x0001;
+// `INPUT_RECORD` structure has a size of 20 and an alignment of 4.
+// See: https://docs.microsoft.com/en-us/windows/console/input-record-str
+#[repr(C)]
+struct InputRecord {
+    event_type: u16,
+    // A union between several types of record.
+    // We only care about key events so a `MaybeUninit` is enough.
+    // Also one `KeyEventRecord` exactly makes the right size and alignment of this struct.
+    key_event: MaybeUninit<KeyEventRecord>,
+}
 
+const INVALID_HANDLE_VALUE: RawHandle = !0 as RawHandle;
+
+const FILE_TYPE_CHAR: u16 = 0x0002;
+
+const EVENT_TYPE_KEY: u16 = 0x0001;
+
+const KEY_SHIFT: u16 = 0x10;
+const KEY_CTRL: u16 = 0x11;
+const KEY_ALT: u16 = 0x12;
+const KEY_CAPS_LOCK: u16 = 0x14;
+const KEY_PRINT_SCREEN: u16 = 0x2c;
+const KEY_LEFT_WINDOWS: u16 = 0x5b;
+const KEY_RIGHT_WINDOWS: u16 = 0x5c;
+const KEY_APPLICATIONS: u16 = 0x5d;
+const KEY_NUM_LOCK: u16 = 0x90;
+const KEY_SCROLL_LOCK: u16 = 0x91;
+
+#[rustfmt::skip]
 #[link(name = "kernel32")]
 extern "system" {
     fn FlushConsoleInputBuffer(handle: RawHandle) -> i32;
     fn GetFileType(handle: RawHandle) -> u16;
-    fn ReadConsoleInputW(handle: RawHandle, buf: *mut InputRecord, len: u32, read: *mut u32)
-        -> i32;
+    fn ReadConsoleInputW(handle: RawHandle, buf: *mut InputRecord, len: u32, read: *mut u32) -> i32;
 }
 
 fn is_console(handle: RawHandle) -> bool {
@@ -67,11 +95,28 @@ fn flush_input_buffer(handle: RawHandle) -> io::Result<()> {
     }
 }
 
+fn is_mod_key(key: u16) -> bool {
+    matches!(
+        key,
+        KEY_SHIFT
+            | KEY_CTRL
+            | KEY_ALT
+            | KEY_CAPS_LOCK
+            | KEY_PRINT_SCREEN
+            | KEY_LEFT_WINDOWS
+            | KEY_RIGHT_WINDOWS
+            | KEY_APPLICATIONS
+            | KEY_NUM_LOCK
+            | KEY_SCROLL_LOCK
+    )
+}
+
 fn read_key(handle: RawHandle) -> io::Result<()> {
     flush_input_buffer(handle)?;
 
     let mut rec = InputRecord {
-        uninit: MaybeUninit::uninit(),
+        event_type: 0,
+        key_event: MaybeUninit::uninit(),
     };
     let mut read = 0;
 
@@ -80,9 +125,16 @@ fn read_key(handle: RawHandle) -> io::Result<()> {
         if res == 0 {
             return Err(io::Error::last_os_error());
         }
+        // MS Docs: The function does not return until at least one input record has been read.
+        // Still, we check this just in case.
         assert!(read == 1);
-        if unsafe { rec.event_type } == KEY_EVENT {
-            return Ok(());
+
+        if rec.event_type == EVENT_TYPE_KEY {
+            let evt = unsafe { rec.key_event.assume_init_ref() };
+            // Ignore key-up events and mod keys.
+            if evt.key_down != 0 && !is_mod_key(evt.virtual_key_code) {
+                return Ok(());
+            }
         }
     }
 }
