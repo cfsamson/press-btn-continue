@@ -1,6 +1,6 @@
 [package]
 name = "press-btn-continue"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Carl Fredrik Samson <cf@samson.no>"]
 edition = "2018"
 repository = "https://github.com/cfsamson/press-btn-continue"
